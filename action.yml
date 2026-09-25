@@ -1,0 +1,33 @@
+name: 'EnvGuard Scanner'
+description: 'Validate, audit, and document environment variables. Detect hardcoded secrets.'
+author: 'Vishal More'
+
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  command:
+    description: 'The EnvGuard command to run (scan, check)'
+    required: false
+    default: 'scan'
+  options:
+    description: 'Additional options to pass to EnvGuard (e.g., --ci)'
+    required: false
+    default: ''
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install EnvGuard
+      run: pip install git+https://github.com/vishalmore90/EnvGuard.git
+      shell: bash
+
+    - name: Run EnvGuard
+      run: envguard ${{ inputs.command }} ${{ inputs.options }}
+      shell: bash
