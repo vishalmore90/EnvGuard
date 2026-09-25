@@ -91,8 +91,16 @@ def sync(
     output_format: str,
 ) -> None:
     """Generate or update .env.example from schema."""
-    click.echo("envguard sync: not yet implemented")
-    raise SystemExit(1)
+    from envguard.commands.sync_cmd import execute_sync
+    from envguard.reporters.base import BaseReporter
+    from envguard.reporters.json_reporter import JsonReporter
+    from envguard.reporters.rich_reporter import RichReporter
+
+    reporter: BaseReporter = JsonReporter() if output_format == "json" else RichReporter()
+
+    exit_code = execute_sync(schema, output, force, reporter)
+    if exit_code != 0:
+        raise SystemExit(exit_code)
 
 
 @cli.command()
