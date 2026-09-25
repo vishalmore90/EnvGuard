@@ -136,38 +136,43 @@ class _EnvVarVisitor(ast.NodeVisitor):
         func = node.func
 
         # os.environ.get("KEY") or environ.get("KEY")
-        if isinstance(func, ast.Attribute) and func.attr == "get":
-            if self._is_environ_node(func.value) and node.args:
-                key_name = self._extract_constant_arg(node.args[0])
-                if key_name:
-                    default = self._extract_default(node)
-                    return EnvVarReference(
-                        name=key_name,
-                        file_path=self._file_path,
-                        line_number=node.lineno,
-                        access_pattern="os.environ.get",
-                        has_default=default is not None or len(node.args) > 1,
-                        default_value=default,
-                    )
+        if (
+            isinstance(func, ast.Attribute)
+            and func.attr == "get"
+            and self._is_environ_node(func.value)
+            and node.args
+        ):
+            key_name = self._extract_constant_arg(node.args[0])
+            if key_name:
+                default = self._extract_default(node)
+                return EnvVarReference(
+                    name=key_name,
+                    file_path=self._file_path,
+                    line_number=node.lineno,
+                    access_pattern="os.environ.get",
+                    has_default=default is not None or len(node.args) > 1,
+                    default_value=default,
+                )
 
         # os.getenv("KEY") or getenv("KEY")
-        if isinstance(func, ast.Attribute) and func.attr == "getenv":
-            if (
-                isinstance(func.value, ast.Name)
-                and func.value.id in self._os_names
-                and node.args
-            ):
-                key_name = self._extract_constant_arg(node.args[0])
-                if key_name:
-                    default = self._extract_default(node)
-                    return EnvVarReference(
-                        name=key_name,
-                        file_path=self._file_path,
-                        line_number=node.lineno,
-                        access_pattern="os.getenv",
-                        has_default=default is not None or len(node.args) > 1,
-                        default_value=default,
-                    )
+        if (
+            isinstance(func, ast.Attribute)
+            and func.attr == "getenv"
+            and isinstance(func.value, ast.Name)
+            and func.value.id in self._os_names
+            and node.args
+        ):
+            key_name = self._extract_constant_arg(node.args[0])
+            if key_name:
+                default = self._extract_default(node)
+                return EnvVarReference(
+                    name=key_name,
+                    file_path=self._file_path,
+                    line_number=node.lineno,
+                    access_pattern="os.getenv",
+                    has_default=default is not None or len(node.args) > 1,
+                    default_value=default,
+                )
 
         if isinstance(func, ast.Name) and func.id in self._getenv_aliases and node.args:
             key_name = self._extract_constant_arg(node.args[0])
@@ -198,9 +203,7 @@ class _EnvVarVisitor(ast.NodeVisitor):
         ):
             return True
         # environ (from os import environ)
-        if isinstance(node, ast.Name) and node.id in self._environ_aliases:
-            return True
-        return False
+        return isinstance(node, ast.Name) and node.id in self._environ_aliases
 
     def _extract_constant_slice(self, node: ast.expr) -> str | None:
         """Extract a string constant from a subscript slice node."""

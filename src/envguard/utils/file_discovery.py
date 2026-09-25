@@ -117,9 +117,8 @@ def _walk(
             if entry.is_dir():
                 if not _is_excluded_dir(entry, exclude_dirs):
                     _walk(entry, extensions, exclude_dirs, results)
-            elif entry.is_file():
-                if entry.suffix.lower() in extensions:
-                    results.append(entry)
+            elif entry.is_file() and entry.suffix.lower() in extensions:
+                results.append(entry)
         except OSError:
             # Skip entries we can't stat
             continue
