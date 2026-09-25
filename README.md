@@ -1,104 +1,128 @@
-# EnvGuard
+# 🛡️ EnvGuard
 
-**Validate, audit, and document environment variables across your projects.**
+> **Validate, audit, and document environment variables across your projects.**
 
-EnvGuard is a CLI tool that scans your source code for environment variable usage, validates them against a schema, keeps your `.env.example` in sync, and detects hardcoded secrets.
+EnvGuard is a CLI tool designed to solve the chaos of missing environment variables, outdated `.env.example` files, and accidentally committed API keys. It automatically scans your source code, generates a schema, validates your environment, and actively hunts for leaked secrets.
 
-## The Problem
+Perfect for CI/CD pipelines and local development.
 
-Environment variable misconfiguration is one of the most common sources of developer frustration:
+---
 
-- `.env.example` files drift out of sync with actual code usage
-- New team members waste hours debugging missing env vars
-- Hardcoded secrets accidentally slip into source code
-- No schema means no validation — env vars are untyped strings
+## 🚀 Features
 
-## Features
+- **Source Code Scanning**: Automatically detects environment variable usage (`os.getenv`, `process.env`, etc.) across Python and JavaScript/TypeScript files.
+- **Schema Validation**: Define types, enums, defaults, and requirements in `.envguard.yml`. Fail your CI/CD pipeline if an environment isn't configured correctly.
+- **Auto-Sync**: Automatically generate and update your `.env.example` file based on actual code usage and schema definitions. No more manual updates!
+- **Secret Detection**: Uses Shannon entropy analysis and regex patterns to detect hardcoded API keys, passwords, and tokens in your source code.
+- **Beautiful Output**: Rich terminal UI for humans, structured JSON output for machines (CI/CD).
 
-- **`envguard init`** — Scan your project and generate a `.envguard.yml` schema
-- **`envguard check`** — Validate your environment against the schema
-- **`envguard sync`** — Generate/update `.env.example` from the schema
-- **`envguard scan`** — Detect hardcoded secrets in source files
+---
 
-## Installation
+## 📦 Installation
+
+EnvGuard requires Python 3.10+.
 
 ```bash
 pip install envguard
 ```
 
-## Quick Start
+*(Note: If cloning from source, use `pip install -e .`)*
+
+---
+
+## 🛠️ Usage
+
+### 1. Initialize (`envguard init`)
+Scan your project to discover environment variable usage and scaffold an `.envguard.yml` schema file.
 
 ```bash
-# Generate a schema from your project
 envguard init
+```
 
-# Validate your environment
+*Optionally specify languages: `envguard init --languages python,javascript`*
+
+### 2. Validate (`envguard check`)
+Check your current environment (or a specific `.env` file) against your schema.
+
+```bash
+# Check current environment
 envguard check
 
-# Update .env.example
-envguard sync
+# Check a specific .env file
+envguard check --env-file .env.local
 
-# Scan for hardcoded secrets
+# CI/CD Strict Mode (treats missing optional vars as errors)
+envguard check --ci --format json
+```
+
+### 3. Sync (`envguard sync`)
+Generate a heavily documented `.env.example` file based on your `.envguard.yml` schema.
+
+```bash
+envguard sync
+```
+
+### 4. Detect Secrets (`envguard scan`)
+Scan your codebase for hardcoded secrets, API keys, and high-entropy strings.
+
+```bash
 envguard scan
 ```
 
-## Supported Languages
+---
 
-- **Python** — AST-based scanning (`os.environ`, `os.getenv`)
-- **JavaScript/TypeScript** — Regex-based scanning (`process.env`)
+## 📝 Schema Example (`.envguard.yml`)
 
-## Tech Stack
+```yaml
+version: '1'
+variables:
+  DATABASE_URL:
+    required: true
+    type: url
+    description: PostgreSQL connection string
+    example: postgresql://user:pass@localhost:5432/mydb
+    sensitive: true
+  PORT:
+    required: false
+    type: integer
+    default: '8080'
+  DEBUG:
+    required: false
+    type: boolean
+    default: 'false'
+  LOG_LEVEL:
+    required: false
+    type: choice
+    choices:
+      - INFO
+      - DEBUG
+      - ERROR
+```
 
-- **Python 3.10+**
-- **Click** — CLI framework
-- **Rich** — Terminal output formatting
-- **PyYAML** — Schema file parsing
+---
 
-## Development
+## 👨‍💻 Development
+
+Want to contribute? Setting up the development environment is easy!
 
 ```bash
 # Clone the repository
 git clone https://github.com/vishalmore90/EnvGuard.git
 cd EnvGuard
 
-# Create virtual environment
-python -m venv .venv
-.venv\Scripts\activate  # Windows
-# source .venv/bin/activate  # macOS/Linux
-
-# Install in editable mode with dev dependencies
-pip install -e ".[dev]"
+# Install dependencies (using uv, pip, or hatch)
+pip install -e .[dev]
 
 # Run tests
 pytest
 
-# Run linter
+# Run linters and type checkers
 ruff check .
-
-# Run formatter check
-ruff format --check .
-
-# Run type checker
 mypy src/envguard
 ```
 
-## Project Structure
+---
 
-```
-envguard/
-├── src/envguard/         # Main package
-│   ├── cli.py            # CLI entry point (Click)
-│   ├── commands/         # Command handlers
-│   ├── scanners/         # Language-specific source code scanners
-│   ├── schema/           # Schema models, loading, validation
-│   ├── secrets/          # Secret detection engine
-│   ├── reporters/        # Output formatting (Rich, JSON)
-│   └── utils/            # Shared utilities
-├── tests/                # Test suite
-├── docs/                 # Documentation
-└── .github/workflows/    # CI/CD
-```
+## 📄 License
 
-## License
-
-MIT — see [LICENSE](LICENSE).
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
