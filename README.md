@@ -69,6 +69,29 @@ Scan your codebase for hardcoded secrets, API keys, and high-entropy strings.
 envguard scan
 ```
 
+## 🤖 GitHub Action
+
+You can easily integrate EnvGuard into your CI/CD pipelines using our native GitHub Action!
+
+```yaml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Validate Environment Schema
+        uses: vishalmore90/EnvGuard@main
+        with:
+          command: check
+          options: --ci
+          
+      - name: Scan for Hardcoded Secrets
+        uses: vishalmore90/EnvGuard@main
+        with:
+          command: scan
+```
+
 ---
 
 ## 📝 Schema Example (`.envguard.yml`)
