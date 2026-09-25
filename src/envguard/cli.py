@@ -41,8 +41,25 @@ def init(
     verbose: bool,
 ) -> None:
     """Scan project and generate .envguard.yml schema."""
-    click.echo("envguard init: not yet implemented")
-    raise SystemExit(1)
+    from envguard.commands.init_cmd import execute_init
+    from envguard.reporters.base import BaseReporter
+    from envguard.reporters.json_reporter import JsonReporter
+    from envguard.reporters.rich_reporter import RichReporter
+
+    reporter: BaseReporter = (
+        JsonReporter() if output_format == "json" else RichReporter()
+    )
+
+    exit_code = execute_init(
+        path=path,
+        output_path=output,
+        languages=languages,
+        force=force,
+        verbose=verbose,
+        reporter=reporter,
+    )
+    if exit_code != 0:
+        raise SystemExit(exit_code)
 
 
 @cli.command()
@@ -67,8 +84,24 @@ def check(
     verbose: bool,
 ) -> None:
     """Validate current environment against schema."""
-    click.echo("envguard check: not yet implemented")
-    raise SystemExit(1)
+    from envguard.commands.check_cmd import execute_check
+    from envguard.reporters.base import BaseReporter
+    from envguard.reporters.json_reporter import JsonReporter
+    from envguard.reporters.rich_reporter import RichReporter
+
+    reporter: BaseReporter = (
+        JsonReporter() if output_format == "json" else RichReporter()
+    )
+
+    exit_code = execute_check(
+        schema_path=schema,
+        env_file=env_file,
+        ci_mode=ci,
+        verbose=verbose,
+        reporter=reporter,
+    )
+    if exit_code != 0:
+        raise SystemExit(exit_code)
 
 
 @cli.command()

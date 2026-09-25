@@ -26,9 +26,7 @@ def test_detector_finds_aws_key(tmp_path: Path) -> None:
 def test_detector_finds_high_entropy_secret(tmp_path: Path) -> None:
     test_file = tmp_path / "test_entropy.py"
     test_file.write_text(
-        "config = {\n"
-        "    'db_password': 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'\n"
-        "}\n"
+        "config = {\n    'db_password': 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'\n}\n"
     )
 
     detector = SecretDetector()
