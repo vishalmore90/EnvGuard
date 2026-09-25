@@ -96,7 +96,9 @@ def sync(
     from envguard.reporters.json_reporter import JsonReporter
     from envguard.reporters.rich_reporter import RichReporter
 
-    reporter: BaseReporter = JsonReporter() if output_format == "json" else RichReporter()
+    reporter: BaseReporter = (
+        JsonReporter() if output_format == "json" else RichReporter()
+    )
 
     exit_code = execute_sync(schema, output, force, reporter)
     if exit_code != 0:
@@ -132,5 +134,22 @@ def scan(
     verbose: bool,
 ) -> None:
     """Detect hardcoded secrets in source files."""
-    click.echo("envguard scan: not yet implemented")
-    raise SystemExit(1)
+    from envguard.commands.scan_cmd import execute_scan
+    from envguard.reporters.base import BaseReporter
+    from envguard.reporters.json_reporter import JsonReporter
+    from envguard.reporters.rich_reporter import RichReporter
+
+    reporter: BaseReporter = (
+        JsonReporter() if output_format == "json" else RichReporter()
+    )
+
+    exit_code = execute_scan(
+        path=path,
+        output_format=output_format,
+        min_entropy=min_entropy,
+        exclude=exclude,
+        verbose=verbose,
+        reporter=reporter,
+    )
+    if exit_code != 0:
+        raise SystemExit(exit_code)
