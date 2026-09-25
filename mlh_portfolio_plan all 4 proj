@@ -1,0 +1,509 @@
+# MLH Fellowship — Portfolio Plan (Level 1)
+
+> **Status:** LEVEL 1 — PORTFOLIO OVERVIEW
+> **Date:** 2026-09-25
+> **Output level:** Project identity + architecture summary only. Full blueprints generated on selection.
+
+---
+
+## PART A — MASTER PORTFOLIO STRATEGY
+
+These four projects are designed to cover distinct engineering surfaces without overlap:
+
+| Dimension | P1 (Web App) | P2 (CLI) | P3 (Extension) | P4 (Discord Bot) |
+|---|---|---|---|---|
+| **Client type** | Browser SPA | Terminal | Browser extension | Discord slash commands |
+| **Backend pattern** | REST API + auth | API integration + local processing | Lightweight API | Event-driven async |
+| **Data model** | Relational (multi-tenant) | Config files + API state | Key-value + sync | Relational (guild-scoped) |
+| **Auth model** | Email/password + sessions | API keys + env config | OAuth + token relay | Discord OAuth2 + guild perms |
+| **Core skill** | Full-stack product eng. | CLI UX + packaging + distribution | Browser APIs + privacy | Async event handling + persistence |
+| **Deployment** | Render/Railway | PyPI + GitHub Releases | Chrome Web Store | Railway/Fly.io + Discord Developer Portal |
+
+No two projects share the same problem domain, user type, or primary engineering challenge.
+
+---
+
+## PART B — PROJECT 1: StatusPing
+
+### Project Identity
+
+| Field | Value |
+|---|---|
+| **Name** | StatusPing |
+| **One-liner** | Open-source status page and uptime monitor you can self-host or use as a service |
+| **Real problem** | Solo developers and small teams running side-projects, APIs, or micro-SaaS products need to communicate uptime to users but existing solutions (Statuspage.io, BetterUptime) are either expensive ($29+/mo), overly complex, or lock you into their infrastructure |
+| **Target users** | Indie hackers, solo SaaS founders, small dev teams, open-source project maintainers |
+| **Why it matters** | When your service goes down, users need a single reliable URL to check. Without a status page, founders get flooded with support emails. Research shows the "status page as a service" niche for micro-SaaS is underserved — most tools target enterprise customers |
+| **Primary use case** | A founder creates a StatusPing account, adds their endpoints (URLs, ports), gets a public status page at `status.myapp.com`, and receives alerts when things break |
+| **Secondary use cases** | Incident timeline with manual updates; scheduled maintenance announcements; embeddable status badge |
+| **Beyond CRUD** | Background job scheduling (health checks every N seconds), time-series data storage for uptime history, multi-tenant data isolation, public vs. private page access, webhook/notification integrations |
+
+### Product Definition (Summary)
+
+- **User journey:** Sign up → Add monitors (URL, interval, expected status) → Get public status page URL → Receive alerts on downtime → Post incident updates → Users see real-time status
+- **Core workflow:** Background scheduler pings endpoints → stores results → computes uptime % → renders public page → sends notifications on state change
+- **MVP scope:** User auth, CRUD monitors, background health checks, public status page, uptime history (90 days), email alerts on downtime, incident management (create/update/resolve)
+- **Post-MVP:** Custom domains, Slack/Discord webhook notifications, team members, API access, embeddable badge
+- **Excluded from MVP:** SMS alerts, multi-region checks, complex escalation policies
+
+### Technical Design (Summary)
+
+| Layer | Choice | Rationale |
+|---|---|---|
+| **Frontend** | Next.js (React) | SSR for public status pages (SEO), dashboard for authenticated users |
+| **Backend** | Python (FastAPI) | REST API, background task scheduling, async HTTP checks |
+| **Database** | PostgreSQL | Relational data (users, monitors, incidents), time-series-like check results with partitioning |
+| **Auth** | Email/password with bcrypt + JWT | Standard web auth, no OAuth complexity needed for MVP |
+| **Background jobs** | APScheduler or Celery with in-process scheduler | Periodic health checks; in-process for MVP, Celery for scale |
+| **Notifications** | SMTP (email) | MVP notification channel |
+| **Deployment** | Railway (backend + DB) + Vercel (frontend) | Free tiers, simple deployment |
+| **Testing** | pytest + httpx (API), Jest + React Testing Library (frontend) | Standard stacks |
+| **CI** | GitHub Actions | Lint, test, type-check, build |
+
+### Architecture Summary
+
+```
+Public User                    Authenticated User
+    │                               │
+    ▼                               ▼
+Public Status Page (Next.js)   Dashboard (Next.js)
+    │                               │
+    └──────────┬────────────────────┘
+               ▼
+         FastAPI REST API
+          ├── Auth Service
+          ├── Monitor Service
+          ├── Incident Service
+          ├── Check Scheduler ──→ HTTP/TCP checks ──→ Target endpoints
+          └── Notification Service ──→ Email (SMTP)
+               │
+               ▼
+          PostgreSQL
+          ├── users
+          ├── monitors
+          ├── check_results (time-partitioned)
+          ├── incidents
+          └── incident_updates
+```
+
+### Key Engineering Skills Demonstrated
+
+- **Backend:** REST API design, input validation, error handling, background job scheduling
+- **Database:** Schema design with indexes, time-series storage patterns, data retention
+- **Auth:** Registration, login, JWT, ownership-based authorization
+- **Frontend:** SSR for public pages, authenticated dashboard, loading/error states
+- **DevOps:** Multi-service deployment, environment management, CI/CD
+- **Testing:** Unit tests for business logic, integration tests for API + DB, mocked HTTP checks
+- **Security:** Multi-tenant data isolation, rate limiting, safe error messages
+
+---
+
+## PART C — PROJECT 2: EnvGuard
+
+### Project Identity
+
+| Field | Value |
+|---|---|
+| **Name** | EnvGuard |
+| **One-liner** | CLI tool that validates, audits, and documents environment variables across your projects |
+| **Real problem** | Developers constantly deal with missing, misnamed, or insecure environment variables. `.env.example` files drift from actual usage. New team members waste hours debugging "works on my machine" issues caused by missing env vars. Research confirms env var management is a top-3 developer pain point — accidental `.env` commits remain a leading cause of credential leaks (CVE-2026-28684 in python-dotenv is a recent example) |
+| **Target users** | Backend developers, DevOps engineers, team leads managing multi-environment deployments |
+| **Why it matters** | Environment variable misconfiguration causes silent failures, security breaches, and wasted debugging time. No widely-adopted CLI tool focuses specifically on env var hygiene |
+| **Primary use case** | A developer runs `envguard check` in their project and instantly sees which required env vars are missing, which have insecure values, and whether `.env.example` is in sync with actual code usage |
+| **Secondary use cases** | Generate `.env.example` from code; detect hardcoded secrets; validate env vars against a schema; diff env vars between environments |
+| **Beyond CRUD** | Static analysis of source code (AST/regex scanning), schema validation, multi-format support, plugin architecture for different frameworks, secure value detection heuristics |
+
+### Product Definition (Summary)
+
+- **User journey:** Install via `pip install envguard` → Run `envguard init` to generate a schema → Run `envguard check` to validate current environment → Fix issues → Run in CI to prevent drift
+- **Core workflow:** Scan source files for env var references → compare against schema/`.env.example` → report missing/extra/insecure vars → output human-readable or JSON report
+- **MVP scope:**
+  - `envguard init` — scan project, generate `.envguard.yml` schema
+  - `envguard check` — validate current env against schema
+  - `envguard sync` — update `.env.example` from schema
+  - `envguard scan` — detect potential hardcoded secrets in source
+  - Support Python, JavaScript/TypeScript projects
+  - Human-readable + JSON output
+  - Meaningful exit codes for CI integration
+- **Post-MVP:** Framework plugins (Django, Flask, Next.js), `envguard diff` (compare environments), pre-commit hook, GitHub Action
+- **Excluded from MVP:** GUI, cloud sync, team features, secret rotation
+
+### Technical Design (Summary)
+
+| Layer | Choice | Rationale |
+|---|---|---|
+| **Language** | Python | Primary language, rich ecosystem for CLI + file parsing |
+| **CLI framework** | Click | Mature, composable, well-documented |
+| **Source scanning** | AST (Python), regex (JS/TS) | Extract `os.environ`, `process.env` references |
+| **Schema format** | YAML (`.envguard.yml`) | Human-readable, supports types + constraints |
+| **Secret detection** | Entropy analysis + pattern matching | Detect high-entropy strings, common secret patterns |
+| **Output** | Rich (terminal) + JSON | Beautiful terminal output, machine-readable for CI |
+| **Packaging** | PyPI (`pyproject.toml`) | Standard Python distribution |
+| **Testing** | pytest + click.testing.CliRunner | CLI testing, fixture-based project mocking |
+| **CI** | GitHub Actions | Lint, test, type-check, publish to PyPI |
+
+### Architecture Summary
+
+```
+User (terminal)
+    │
+    ▼
+CLI Interface (Click)
+    ├── init command ──→ Scanner ──→ Source files ──→ Schema generator
+    ├── check command ──→ Schema loader + Env loader ──→ Validator ──→ Reporter
+    ├── sync command ──→ Schema loader ──→ .env.example writer
+    └── scan command ──→ Secret scanner ──→ Source files ──→ Reporter
+         │
+         ▼
+    Output (Rich terminal / JSON)
+
+No database. No network calls (MVP).
+Configuration via .envguard.yml + CLI flags.
+```
+
+### Key Engineering Skills Demonstrated
+
+- **CLI engineering:** Command design, flags, help text, exit codes, terminal UX
+- **Static analysis:** Source code scanning, AST parsing, pattern matching
+- **Packaging:** PyPI distribution, `pyproject.toml`, versioning
+- **Testing:** CLI integration tests, fixture-based testing, edge cases
+- **Security:** Secret detection heuristics, secure defaults
+- **Developer tooling:** CI integration, pre-commit compatibility, multi-format output
+- **Code quality:** Clean module separation, type hints, defensive parsing
+
+---
+
+## PART D — PROJECT 3: ClipVault
+
+### Project Identity
+
+| Field | Value |
+|---|---|
+| **Name** | ClipVault |
+| **One-liner** | Browser extension that saves and organizes code snippets from any webpage with context |
+| **Real problem** | Developers constantly copy code from Stack Overflow, documentation, blog posts, and GitHub. These snippets end up scattered across text files, Slack messages, and forgotten browser tabs. Research shows "tab chaos" and context-switching are top developer productivity killers. Existing bookmark managers save pages, not the specific code block with its surrounding context |
+| **Target users** | Software developers who read documentation and technical content in the browser daily |
+| **Why it matters** | The gap between "reading code on the web" and "using it in your project" involves unnecessary friction — copying, switching apps, pasting, losing the source URL. Developers need a way to capture snippets with provenance |
+| **Primary use case** | Developer highlights a code block on a docs page → right-clicks "Save to ClipVault" → snippet is saved with source URL, language, tags, and surrounding context → later searches their vault to find it |
+| **Secondary use cases** | Browse saved snippets in extension popup; copy snippets with one click; filter by language/tag; export collection; share snippet with permalink |
+| **Beyond CRUD** | Content script DOM interaction, browser storage with sync, context menu API, code language detection, search/filter in popup, backend sync for cross-device access |
+
+### Product Definition (Summary)
+
+- **User journey:** Install extension → browse normally → highlight code → right-click "Save to ClipVault" → snippet saved with metadata → click extension icon to browse/search vault → copy snippet to clipboard
+- **Core workflow:** Content script detects selection → extracts code + metadata (URL, title, language) → saves to browser storage → popup provides searchable interface → optional backend sync
+- **MVP scope:**
+  - Chrome extension (Manifest V3)
+  - Right-click context menu to save selected text as snippet
+  - Auto-detect programming language from page context
+  - Capture source URL, page title, timestamp
+  - Popup UI: list, search, filter by language, copy to clipboard
+  - Local browser storage (chrome.storage.local)
+  - Tag snippets manually
+  - Export as JSON
+- **Post-MVP:** Backend sync service (FastAPI), cross-device sync, Firefox support, syntax highlighting in popup, snippet sharing via public links
+- **Excluded from MVP:** AI summarization, collaborative collections, IDE integration
+
+### Technical Design (Summary)
+
+| Layer | Choice | Rationale |
+|---|---|---|
+| **Extension platform** | Chrome (Manifest V3) | Largest market share, MV3 is current standard |
+| **Content script** | Vanilla JS | Lightweight, no framework needed for DOM interaction |
+| **Popup UI** | HTML + CSS + vanilla JS | Small UI, framework overhead not justified |
+| **Storage (MVP)** | chrome.storage.local | No backend needed for MVP, 10MB limit sufficient |
+| **Backend (post-MVP)** | FastAPI (Python) | Sync service for cross-device |
+| **Language detection** | Heuristic: parent element classes, page URL patterns, keyword analysis | Deterministic approach, no AI needed |
+| **Testing** | Jest (unit tests for logic), manual testing for extension | Extension testing is inherently integration-heavy |
+| **CI** | GitHub Actions | Lint, test, build zip for Chrome Web Store |
+
+### Architecture Summary
+
+```
+Web Page (any)
+    │
+    ▼
+Content Script (injected)
+    ├── Listens for context menu click
+    ├── Extracts selected text
+    ├── Captures metadata (URL, title, code language)
+    └── Sends message to Service Worker
+         │
+         ▼
+Service Worker (background)
+    ├── Receives snippet data
+    ├── Generates ID, timestamp
+    ├── Stores in chrome.storage.local
+    └── Updates badge count
+         │
+         ▼
+Popup (browser action)
+    ├── Reads from chrome.storage.local
+    ├── Search/filter interface
+    ├── Copy to clipboard
+    ├── Tag management
+    └── Export (JSON)
+
+Permissions: contextMenus, storage, activeTab
+No network requests in MVP. Minimal permissions.
+```
+
+### Key Engineering Skills Demonstrated
+
+- **Browser APIs:** Manifest V3, content scripts, service workers, context menus, storage API
+- **Privacy:** Minimal permissions, no data transmission in MVP, clear data model
+- **Frontend:** Popup UI with search/filter, responsive design in constrained space
+- **Architecture:** Message passing between content script ↔ service worker ↔ popup
+- **Packaging:** Chrome Web Store submission, versioning
+- **Testing:** Unit tests for data logic, integration considerations for browser APIs
+- **Security:** Content Security Policy, input sanitization, XSS prevention in popup
+
+---
+
+## PART E — PROJECT 4: HabitPact
+
+### Project Identity
+
+| Field | Value |
+|---|---|
+| **Name** | HabitPact |
+| **One-liner** | Discord bot for accountability-based habit tracking within communities |
+| **Real problem** | Study groups, fitness communities, and learning servers on Discord struggle with member accountability. Research confirms "low participation/ghosting" and "the dead server perception" are top Discord community pain points. Existing study bots (Study Together, LionBot) focus narrowly on Pomodoro timers and voice channel tracking — they don't support general-purpose habit tracking with social accountability |
+| **Target users** | Discord server owners running study groups, fitness communities, coding bootcamp servers, or any community with shared goals |
+| **Why it matters** | Accountability is the #1 predictor of habit formation success. Discord communities are natural accountability groups, but they lack tools to track commitments, streaks, and progress transparently |
+| **Primary use case** | A server admin sets up HabitPact → members create habits (e.g., "30 min reading daily") → members check in daily with `/checkin` → bot tracks streaks, shows leaderboards → members see each other's progress |
+| **Secondary use cases** | Weekly summary reports; milestone celebrations; habit reminders; personal stats; server-wide analytics |
+| **Beyond CRUD** | Guild-scoped data isolation, Discord interaction handling (slash commands, buttons, embeds), scheduled tasks (reminders, weekly reports), streak calculation logic, timezone-aware scheduling |
+
+### Product Definition (Summary)
+
+- **User journey:** Server admin invites bot → runs `/setup` → members run `/habit create "Read 30min"` → daily `/checkin read` → bot confirms + updates streak → `/stats` shows personal progress → `/leaderboard` shows server rankings
+- **Core workflow:** Members create habits → check in daily → bot validates (one check-in per habit per day) → calculates streaks → sends reminders → generates weekly reports
+- **MVP scope:**
+  - Slash commands: `/habit create`, `/habit list`, `/habit delete`, `/checkin`, `/stats`, `/leaderboard`, `/setup`
+  - Per-user, per-guild habit tracking
+  - Streak tracking with timezone awareness
+  - Daily reminder (configurable per user)
+  - Weekly server summary (automated)
+  - Rich embeds for all responses
+  - SQLite (dev) / PostgreSQL (prod) persistence
+- **Post-MVP:** Habit categories, accountability partners (paired check-ins), milestone roles (auto-assign Discord roles at streak milestones), habit templates, REST API for web dashboard
+- **Excluded from MVP:** Voice channel tracking, Pomodoro timer, gamification currency, web dashboard
+
+### Technical Design (Summary)
+
+| Layer | Choice | Rationale |
+|---|---|---|
+| **Language** | Python | discord.py is the most mature bot library |
+| **Bot framework** | discord.py (2.x) | Slash commands, views, embeds, events |
+| **Database** | PostgreSQL (prod), SQLite (dev) | Relational data: guilds, users, habits, check-ins |
+| **ORM** | SQLAlchemy + Alembic | Migrations, type-safe queries |
+| **Scheduling** | APScheduler | Daily reminders, weekly reports |
+| **Deployment** | Railway or Fly.io | Always-on process, not serverless |
+| **Testing** | pytest + dpytest (discord.py testing) | Unit tests for logic, integration tests for commands |
+| **CI** | GitHub Actions | Lint, test, type-check |
+
+### Architecture Summary
+
+```
+Discord User
+    │
+    ▼
+Discord API (Gateway + REST)
+    │
+    ▼
+discord.py Bot Client
+    ├── Command Handler (Cogs)
+    │   ├── HabitCog ──→ HabitService ──→ Database
+    │   ├── CheckinCog ──→ CheckinService ──→ Database
+    │   ├── StatsCog ──→ StatsService ──→ Database
+    │   └── AdminCog ──→ GuildService ──→ Database
+    ├── Event Handler
+    │   ├── on_guild_join ──→ GuildService
+    │   └── on_guild_remove ──→ cleanup
+    └── Scheduler
+        ├── Daily reminders ──→ Discord API
+        └── Weekly reports ──→ Discord API
+             │
+             ▼
+        PostgreSQL
+        ├── guilds
+        ├── guild_settings
+        ├── users
+        ├── habits
+        ├── checkins
+        └── streaks (materialized or computed)
+```
+
+### Key Engineering Skills Demonstrated
+
+- **Async programming:** discord.py is fully async (aiohttp, asyncio)
+- **Database:** Multi-tenant (guild-scoped) schema, streak calculation, timezone handling
+- **Event-driven architecture:** Gateway events, command handlers, scheduled tasks
+- **API design:** Slash command interface design (UX for Discord)
+- **Deployment:** Long-running process deployment, reconnection handling, graceful shutdown
+- **Testing:** Bot command testing, service layer unit tests, time-dependent logic testing
+- **Security:** Guild permission checks, rate limiting, input validation, bot token management
+
+---
+
+## PART F — TECHNOLOGY MATRIX
+
+| Project | Primary Language | Client | Backend | Database | Auth | Deployment | Testing | Main Engineering Skill |
+|---|---|---|---|---|---|---|---|---|
+| **StatusPing** | Python + TypeScript | Next.js SPA | FastAPI | PostgreSQL | JWT (email/pass) | Railway + Vercel | pytest + Jest | Full-stack product engineering |
+| **EnvGuard** | Python | Terminal (Click) | None (local tool) | None (file-based) | N/A (local) | PyPI | pytest + CliRunner | CLI UX + static analysis + packaging |
+| **ClipVault** | JavaScript | Chrome extension | None (MVP) | chrome.storage | N/A (MVP) | Chrome Web Store | Jest | Browser APIs + privacy + message passing |
+| **HabitPact** | Python | Discord (discord.py) | Bot process | PostgreSQL | Discord OAuth2 | Railway/Fly.io | pytest + dpytest | Async event handling + scheduling |
+
+---
+
+## PART G — BUILD ORDER
+
+### Recommended progression: P2 → P4 → P1 → P3
+
+| Order | Project | Rationale |
+|---|---|---|
+| **1st** | **EnvGuard** (CLI) | Fastest to a working product. No deployment infrastructure needed. Teaches clean Python architecture, testing, packaging, and PyPI publishing. Builds confidence with a shippable tool before tackling complex systems. |
+| **2nd** | **HabitPact** (Discord Bot) | Introduces databases, async programming, and multi-tenant data. Moderate complexity. Teaches event-driven patterns and scheduled tasks. Deployable quickly on Railway. Real users from day one (any Discord server). |
+| **3rd** | **StatusPing** (Web App) | Most complex project. Requires frontend + backend + database + auth + background jobs. Benefits from database and API experience gained from HabitPact. Teaches full-stack product engineering end-to-end. |
+| **4th** | **ClipVault** (Extension) | Different engineering surface entirely (browser APIs). Benefits from accumulated backend/testing experience. Teaches a unique skill set (content scripts, service workers, browser storage) that complements the other three projects. |
+
+This progression builds skills incrementally: local tool → backend service → full-stack app → browser platform.
+
+---
+
+## PART H — MASTER IMPLEMENTATION CHECKLIST
+
+For each project, the following must be completed:
+
+### Product
+- [ ] Problem definition documented
+- [ ] User journey mapped
+- [ ] MVP scope defined and bounded
+- [ ] Non-goals explicitly stated
+
+### Architecture
+- [ ] System diagram created
+- [ ] Data flow documented
+- [ ] Component responsibilities defined
+- [ ] External dependencies identified
+
+### Backend
+- [ ] API endpoints defined (where applicable)
+- [ ] Input validation implemented
+- [ ] Error handling standardized
+- [ ] Logging structured
+- [ ] Health check endpoint (where applicable)
+
+### Database
+- [ ] Schema designed before implementation
+- [ ] Indexes justified
+- [ ] Migrations set up
+- [ ] Constraints enforced at DB level
+
+### Authentication
+- [ ] Auth flow implemented (where applicable)
+- [ ] Authorization checks on all protected resources
+- [ ] Secrets managed via environment variables
+- [ ] `.env.example` created
+
+### Client (Frontend / CLI / Extension / Bot)
+- [ ] Core user workflow functional
+- [ ] Error states handled
+- [ ] Loading states handled (where applicable)
+- [ ] Accessible and usable
+
+### Testing
+- [ ] Unit tests for business logic
+- [ ] Integration tests for API/DB (where applicable)
+- [ ] CLI/command tests (where applicable)
+- [ ] Edge cases covered
+- [ ] Mocking strategy for external services
+
+### Security
+- [ ] No hardcoded secrets
+- [ ] Input validated and sanitized
+- [ ] Auth/authz tested
+- [ ] Dependencies audited
+- [ ] Error messages don't leak internals
+
+### Documentation
+- [ ] README complete (problem, setup, usage, architecture)
+- [ ] API docs (where applicable)
+- [ ] Environment variables documented
+- [ ] Design decisions explained
+
+### Git
+- [ ] `.gitignore` configured
+- [ ] Clean, incremental commit history
+- [ ] No secrets in history
+- [ ] LICENSE file
+
+### CI/CD
+- [ ] GitHub Actions: lint, test, type-check, build
+- [ ] Automated on PR and push to main
+
+### Deployment
+- [ ] Production deployment working
+- [ ] Environment variables configured
+- [ ] Database migrated (where applicable)
+- [ ] HTTPS enabled
+- [ ] Rollback plan documented
+
+### Monitoring
+- [ ] Application logs accessible
+- [ ] Health check endpoint (where applicable)
+- [ ] Error tracking strategy defined
+
+---
+
+## PART I — ANTIGRAVITY SESSION START PROMPT
+
+```
+You are operating in strict human-gated engineering mode.
+
+Inspect → Plan → Implement → Test → Review → Report → STOP → Human Approval → Continue
+
+Never automatically start the next phase.
+
+At the end of every phase:
+1. verify the implementation
+2. report changed files
+3. report commands and real results
+4. report acceptance criteria
+5. report known issues and risks
+6. report Git status
+7. STOP
+
+Wait for explicit:
+APPROVED
+or
+CHANGES REQUESTED: <your feedback>
+or
+REPLAN
+
+Do not infer approval.
+
+Respect the output-size strategy:
+- do not regenerate unchanged context
+- work on one project/phase at a time
+- prefer editing files over dumping code
+- summarize instead of repeating
+- split large tasks at logical boundaries
+```
+
+---
+
+## NEXT STEPS
+
+This is a **Level 1 overview**. No implementation details, full API specs, or database schemas have been generated yet.
+
+**To proceed:**
+
+1. Review the 4 project proposals above
+2. Tell me which project you want to build first (or request changes to any proposal)
+3. I will generate the **Level 2 — Project Blueprint** for that project only
+
+> [!TIP]
+> The recommended build order is **EnvGuard → HabitPact → StatusPing → ClipVault**, but choose based on what excites you most — motivation matters for portfolio projects you need to explain in interviews.
