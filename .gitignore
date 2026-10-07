@@ -39,3 +39,5 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+.envguard.yml
